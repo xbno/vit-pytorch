@@ -19,13 +19,13 @@
             "type": "python",
             "request": "launch",
             "program": "${workspaceFolder}/vit_pytorch/dino_vit_3d.py",
-            // "cwd": "${workspaceFolder}/pl_transformer",
+            "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "justMyCode": false,
-            // "env": {
-            //     "PYTHONPATH": "${workspaceRoot}/pl_transformer",
-            //     // "PATH": "${workspaceFolder}/pl_models",
-            // },
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}",
+                // "PATH": "${workspaceFolder}/pl_models",
+            },
             // "env": {
             //     "PYTHONPATH": "${workspaceRoot}/lightning-language-modeling:/Users/xbno/options_trading/pl_transformer",
             // },

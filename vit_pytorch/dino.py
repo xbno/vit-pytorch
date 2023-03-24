@@ -452,7 +452,6 @@ class Dino3D(nn.Module):
             return self.student_encoder(x, return_projection=return_projection)
 
         image_one, image_two = self.augment1(x), self.augment2(x)
-        print(image_one.shape, image_two.shape)
 
         local_image_one, local_image_two = self.local_crop(image_one), self.local_crop(
             image_two
