@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# pretrained model
+dino_vit_3d_catdogs_100e.pt
+
 # C extensions
 *.so
 
