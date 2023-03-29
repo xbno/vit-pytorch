@@ -47,7 +47,8 @@ def seed_everything(seed):
 if __name__ == "__main__":
 
     # Training settings
-    batch_size = 32
+    batch_size = 8
+    num_workers = 4
     epochs = 20
     lr = 3e-5
     gamma = 0.7
@@ -72,18 +73,27 @@ if __name__ == "__main__":
         dataset=train_ds,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=num_workers,
         # collate_fn=contrastive.pad_collate,
     )
 
     print(len(train_ds), len(train_dl))
+
+    def mean_std(loader):
+        images = next(iter(loader))
+        # shape of images = [b,c,w,h]
+        mean = images.mean([0, 2, 3])
+        std = images.std([0, 2, 3])
+        print("mean and std: \n", mean, std)
+        return mean, std
+
+    mean_std(train_dl)
 
     model = ViTOC(
         image_height=200,
         image_width=20,
         patch_height=10,
         patch_width=2,
-        # image_patch_size=10,  # image patch size
         frames=10,  # number of frames
         frame_patch_size=2,  # frame patch size
         channels=18,
@@ -101,6 +111,11 @@ if __name__ == "__main__":
     # model pass thrus
     # b = next(iter(train_dl))
     # model(b[:4]).shape
+
+    def count_parameters(model):
+        return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    count_parameters(model)
 
     learner = Dino3DOC(
         model,
@@ -125,6 +140,8 @@ if __name__ == "__main__":
     opt = torch.optim.Adam(learner.parameters(), lr=3e-4)
 
     learner = learner.to(device)
+
+    count_parameters(learner)
 
     # bs = 16, 200x20
     # num_wrokers=8 @ ~4:40 per epoch, 2.15s/it, ~100%gpu no peaking
