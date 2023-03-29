@@ -352,6 +352,7 @@ class Dino3D(nn.Module):
         net,
         frames,
         image_size,
+        channels=3,
         hidden_layer=-2,
         projection_hidden_size=256,
         num_classes_K=65336,
@@ -388,7 +389,7 @@ class Dino3D(nn.Module):
 
         # local and global crops
 
-        self.local_crop = T.RandomCrop((image_size, image_size))
+        self.local_crop = T.RandomCrop((image_size, image_size))  # needs to be smaller
         self.global_crop = T.RandomCrop((image_size, image_size))
 
         self.student_encoder = NetWrapper(
@@ -415,7 +416,9 @@ class Dino3D(nn.Module):
         self.to(device)
 
         # send a mock image tensor to instantiate singleton parameters
-        self.forward(torch.randn(2, 3, frames, image_size, image_size, device=device))
+        self.forward(
+            torch.randn(2, channels, frames, image_size, image_size, device=device)
+        )
 
     @singleton("teacher_encoder")
     def _get_teacher_encoder(self):
@@ -467,6 +470,159 @@ class Dino3D(nn.Module):
             teacher_encoder = self._get_teacher_encoder()
             teacher_proj_one, _ = teacher_encoder(global_image_one)
             teacher_proj_two, _ = teacher_encoder(global_image_two)
+
+        loss_fn_ = partial(
+            loss_fn,
+            student_temp=default(student_temp, self.student_temp),
+            teacher_temp=default(teacher_temp, self.teacher_temp),
+            centers=self.teacher_centers,
+        )
+
+        teacher_logits_avg = torch.cat((teacher_proj_one, teacher_proj_two)).mean(dim=0)
+        self.last_teacher_centers.copy_(teacher_logits_avg)
+
+        loss = (
+            loss_fn_(teacher_proj_one, student_proj_two)
+            + loss_fn_(teacher_proj_two, student_proj_one)
+        ) / 2
+        return loss
+
+
+class Dino3DOC(nn.Module):
+    def __init__(
+        self,
+        net,
+        image_height,
+        image_width,
+        frames,
+        channels,
+        hidden_layer=-2,
+        projection_hidden_size=256,
+        num_classes_K=65336,
+        projection_layers=4,
+        student_temp=0.9,
+        teacher_temp=0.04,
+        local_upper_crop_scale=0.4,
+        global_lower_crop_scale=0.5,
+        moving_average_decay=0.9,
+        center_moving_average_decay=0.9,
+        augment_fn=None,
+        augment_fn2=None,
+    ):
+        super().__init__()
+        self.net = net
+
+        # default BYOL augmentation
+
+        DEFAULT_AUG = torch.nn.Sequential(
+            RandomApply(T.ColorJitter(0.8, 0.8, 0.8, 0.2), p=0.3),
+            T.RandomGrayscale(p=0.2),
+            T.RandomHorizontalFlip(),
+            RandomApply(T.GaussianBlur((3, 3), (1.0, 2.0)), p=0.2),
+            T.Normalize(
+                # mean=torch.tensor([0.485, 0.456, 0.406]),
+                # std=torch.tensor([0.229, 0.224, 0.225])),
+                mean=torch.tensor([0.4882, 0.4557, 0.4181]),
+                std=torch.tensor([0.2608, 0.2551, 0.2575]),
+            ),
+        )
+
+        self.augment1 = default(augment_fn, DEFAULT_AUG)
+        self.augment2 = default(augment_fn2, DEFAULT_AUG)
+
+        # local and global crops
+
+        self.local_crop = T.RandomCrop(
+            (image_height, image_width)
+        )  # needs to be smaller
+        self.global_crop = T.RandomCrop((image_height, image_width))
+
+        self.student_encoder = NetWrapper(
+            net,
+            num_classes_K,
+            projection_hidden_size,
+            projection_layers,
+            layer=hidden_layer,
+        )
+
+        self.teacher_encoder = None
+        self.teacher_ema_updater = EMA(moving_average_decay)
+
+        self.register_buffer("teacher_centers", torch.zeros(1, num_classes_K))
+        self.register_buffer("last_teacher_centers", torch.zeros(1, num_classes_K))
+
+        self.teacher_centering_ema_updater = EMA(center_moving_average_decay)
+
+        self.student_temp = student_temp
+        self.teacher_temp = teacher_temp
+
+        # get device of network and make wrapper same device
+        device = get_module_device(net)
+        self.to(device)
+
+        # send a mock image tensor to instantiate singleton parameters
+        self.forward(
+            {
+                "window_one": torch.randn(
+                    2, channels, frames, image_height, image_width, device=device
+                ),
+                "window_two": torch.randn(
+                    2, channels, frames, image_height, image_width, device=device
+                ),
+            }
+        )
+
+    @singleton("teacher_encoder")
+    def _get_teacher_encoder(self):
+        teacher_encoder = copy.deepcopy(self.student_encoder)
+        set_requires_grad(teacher_encoder, False)
+        return teacher_encoder
+
+    def reset_moving_average(self):
+        del self.teacher_encoder
+        self.teacher_encoder = None
+
+    def update_moving_average(self):
+        assert (
+            self.teacher_encoder is not None
+        ), "target encoder has not been created yet"
+        update_moving_average(
+            self.teacher_ema_updater, self.teacher_encoder, self.student_encoder
+        )
+
+        new_teacher_centers = self.teacher_centering_ema_updater.update_average(
+            self.teacher_centers, self.last_teacher_centers
+        )
+        self.teacher_centers.copy_(new_teacher_centers)
+
+    def forward(
+        self,
+        x,
+        return_embedding=False,
+        return_projection=True,
+        student_temp=None,
+        teacher_temp=None,
+    ):
+        if return_embedding:
+            return self.student_encoder(
+                x["window_one"], return_projection=return_projection
+            )
+
+        window_one, window_two = x["window_one"], x["window_two"]
+
+        local_window_one = self.local_crop(window_one)
+        local_window_two = self.local_crop(window_two)
+
+        global_window_one = self.global_crop(window_one)
+        global_window_two = self.global_crop(window_two)
+
+        student_proj_one, _ = self.student_encoder(local_window_one)
+        student_proj_two, _ = self.student_encoder(local_window_two)
+
+        with torch.no_grad():
+            teacher_encoder = self._get_teacher_encoder()
+            teacher_proj_one, _ = teacher_encoder(global_window_one)
+            teacher_proj_two, _ = teacher_encoder(global_window_two)
 
         loss_fn_ = partial(
             loss_fn,

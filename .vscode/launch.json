@@ -25,21 +25,20 @@
             "env": {
                 "PYTHONPATH": "${workspaceRoot}",
                 // "PATH": "${workspaceFolder}/pl_models",
-            },
-            // "env": {
-            //     "PYTHONPATH": "${workspaceRoot}/lightning-language-modeling:/Users/xbno/options_trading/pl_transformer",
-            // },
-            // "args": [
-            //     "--event",
-            //     // "{\"mc_bt_path\": \"/Users/xbno/options_trading/pl_transformer/sample_data/transformer_100sm.csv.gz\", \"num_workers\": \"0\", \"max_epochs\": \"10\", \"max_seq_len\":\"512\"}",
-            //     // "{\"mc_bt_path\": \"/content/drive/MyDrive/bt/transformer_100sm.csv.gz\", \"num_workers\": \"4\", \"max_epochs\": \"10\", \"max_seq_len\":\"512\", \"batch_size\":64, \"gpus\":1, \"symbols\":\"[]\"}",
-            //     "{\"mc_bt_path\": \"/content/drive/MyDrive/bt/transformer_100sm.csv.gz\", \"num_workers\": \"4\", \"max_epochs\": \"5\", \"max_seq_len\":\"512\", \"batch_size\":32, \"gpus\":1}",
-            //     // "{\"mc_bt_path\": \"/Users/xbno/options_trading/pl_transformer/sample_data/transformer_100sm.csv.gz\", \"num_workers\": \"0\", \"max_epochs\": \"10\", \"max_seq_len\":\"512\", \"nrows\": 500000}",
-            //     // "{\"labeled_mc_bt_path\": \"s3://ghc-options-data-cdk/mc/btoc_pctinc.csv.gz\", \"num_workers\": \"0\", \"max_epochs\": \"5\", \"nrows\": 25000, \"bs_samples\": 10}",
-            //     // "{\"labeled_mc_bt_path\": \"/content/drive/MyDrive/bt/btoc_pctinc.csv.gz\", \"num_workers\": \"8\", \"max_epochs\": \"10\",\"gpus\":1}",
-            //     "--context",
-            //     "{}"
-            // ],
+            }
+        },
+        {
+            "name": "dino_vit_3d_oc",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/vit_pytorch/dino_vit_3d_oc.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}",
+                // "PATH": "${workspaceFolder}/pl_models",
+            }
         },
     ]
 }
