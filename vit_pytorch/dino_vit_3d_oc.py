@@ -81,7 +81,9 @@ if __name__ == "__main__":
     model = ViTOC(
         image_height=200,
         image_width=20,
-        image_patch_size=10,  # image patch size
+        patch_height=10,
+        patch_width=2,
+        # image_patch_size=10,  # image patch size
         frames=10,  # number of frames
         frame_patch_size=2,  # frame patch size
         channels=18,

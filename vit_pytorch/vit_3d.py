@@ -187,7 +187,9 @@ class ViTOC(nn.Module):
         *,
         image_height,
         image_width,
-        image_patch_size,
+        patch_height,
+        patch_width,
+        # image_patch_size,
         frames,
         frame_patch_size,
         num_classes,
@@ -203,7 +205,7 @@ class ViTOC(nn.Module):
     ):
         super().__init__()
         # image_height, image_width = pair(image_size)
-        patch_height, patch_width = pair(image_patch_size)
+        # patch_height, patch_width = pair(image_patch_size)
 
         assert (
             image_height % patch_height == 0 and image_width % patch_width == 0
