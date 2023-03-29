@@ -7,6 +7,12 @@ import numpy as np
 import logging
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms as T
+from torchvision.transforms.functional import normalize
+from torchvision.transforms._transforms_video import (
+    CenterCropVideo,
+    NormalizeVideo,
+)
 
 
 def pad_to_dim(v, dim):
@@ -70,51 +76,6 @@ def pad_collate(batch):
             torch.stack([s for s in np.array(batch, dtype=object)[:, 1]]), 1, 2
         ),
     ]
-
-
-# def spatiotemporal_symbol_set(
-#     dataset_path,
-#     symbols,
-#     dates,
-#     num_frames=2,
-#     stride=1,
-#     max_delta=3,
-#     num_sets=10,
-# ):
-
-#     full_sets = []
-#     deltas = np.random.choice(
-#         np.arange(max_delta),
-#         p=np.arange(max_delta, 0, -1) / sum(np.arange(max_delta, 0, -1)),
-#         size=num_sets,
-#     )
-#     symbol_pairs = list(itertools.combinations(symbols, 2))
-#     random.shuffle(symbol_pairs)
-#     for (symbol1, symbol2), delta in zip(symbol_pairs[:num_sets], deltas):
-#         if len(dates) <= num_frames * 3 + delta * 2:
-#             logging.warning(
-#                 f"num_frames({num_frames}) and delta({delta}): {num_frames * 3 + delta * 2}d sample >> {len(dates)}d dataset"
-#                 # + f"{num_frames}d + {delta}d + {num_frames}d + {delta}d + {num_frames}d"
-#             )
-#         date_set = [
-#             (
-#                 dates[x : x + num_frames],
-#                 dates[x + num_frames + delta : x + num_frames * 2 + delta],
-#                 dates[x + num_frames * 2 + delta : x + num_frames * 3 + delta],
-#             )
-#             for x in range(0, len(dates), stride)
-#             if len(dates[x + num_frames * 2 + delta : x + num_frames * 3 + delta])
-#             == num_frames
-#         ]
-#         symbol_date_sets = [
-#             (
-#                 [f"{dataset_path}/{symbol1}-{f}.npy" for f in f1 + f2],
-#                 [f"{dataset_path}/{symbol2}-{f}.npy" for f in f2 + f3],
-#             )
-#             for f1, f2, f3 in date_set
-#         ]
-#         full_sets.extend(symbol_date_sets)
-#     return full_sets
 
 
 def spatiotemporal_dates(
@@ -242,7 +203,57 @@ class OcDataset(Dataset):
         max_delta,
         skip_symbols,
     ):
-
+        self.transform = T.Compose(
+            [
+                NormalizeVideo(
+                    # channel_dim=0,
+                    mean=torch.tensor(
+                        [
+                            6.2324e01,
+                            9.6467e00,
+                            6.1295e01,
+                            7.7610e00,
+                            1.9308e-01,
+                            2.5376e02,
+                            1.4423e-04,
+                            1.0992e00,
+                            4.7027e01,
+                            1.0202e01,
+                            9.1426e00,
+                            9.7798e00,
+                            8.0463e00,
+                            1.0072e00,
+                            2.2545e02,
+                            8.9769e-05,
+                            1.0992e00,
+                            3.0351e01,
+                        ]
+                    ),
+                    std=torch.tensor(
+                        [
+                            2.5093e02,
+                            7.3349e01,
+                            2.4793e02,
+                            6.2451e01,
+                            1.1387e00,
+                            2.4505e03,
+                            3.4080e-03,
+                            3.6982e00,
+                            1.3704e03,
+                            4.8059e01,
+                            5.6805e01,
+                            4.7098e01,
+                            4.8254e01,
+                            3.4649e00,
+                            2.0212e03,
+                            3.6038e-03,
+                            3.6982e00,
+                            7.5986e02,
+                        ]
+                    ),
+                )
+            ]
+        )
         symbols_dates = load_symbols_dates_from_dataset(data_dir)
 
         # spatiotemporal: https://arxiv.org/pdf/2008.03800v4.pdf
@@ -265,6 +276,10 @@ class OcDataset(Dataset):
         # from days, channels, strikes, exps -> channels, days, strikes, exps
         # print(idx)
         return {
-            "window_one": load_uniform_volume(self.pairs[idx]["window_one"]),
-            "window_two": load_uniform_volume(self.pairs[idx]["window_two"]),
+            "window_one": self.transform(
+                load_uniform_volume(self.pairs[idx]["window_one"])
+            ),
+            "window_two": self.transform(
+                load_uniform_volume(self.pairs[idx]["window_two"])
+            ),
         }

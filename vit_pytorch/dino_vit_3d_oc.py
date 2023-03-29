@@ -33,6 +33,10 @@ from vit_pytorch.dino import Dino3D, Dino3DOC
 import contrastive
 import pathlib
 
+import warnings
+
+warnings.filterwarnings("ignore")
+
 
 def seed_everything(seed):
     random.seed(seed)
@@ -47,8 +51,8 @@ def seed_everything(seed):
 if __name__ == "__main__":
 
     # Training settings
-    batch_size = 8
-    num_workers = 4
+    batch_size = 16
+    num_workers = 2
     epochs = 20
     lr = 3e-5
     gamma = 0.7
@@ -80,10 +84,12 @@ if __name__ == "__main__":
     print(len(train_ds), len(train_dl))
 
     def mean_std(loader):
+        # shape of images = [b,c,f,w,h]
         images = next(iter(loader))
-        # shape of images = [b,c,w,h]
-        mean = images.mean([0, 2, 3])
-        std = images.std([0, 2, 3])
+        mean = torch.cat((images["window_one"], images["window_one"])).mean(
+            [0, 2, 3, 4]
+        )
+        std = torch.cat((images["window_one"], images["window_one"])).std([0, 2, 3, 4])
         print("mean and std: \n", mean, std)
         return mean, std
 
@@ -93,7 +99,7 @@ if __name__ == "__main__":
         image_height=200,
         image_width=20,
         patch_height=10,
-        patch_width=2,
+        patch_width=4,
         frames=10,  # number of frames
         frame_patch_size=2,  # frame patch size
         channels=18,
@@ -133,8 +139,8 @@ if __name__ == "__main__":
         global_lower_crop_scale=0.5,  # lower bound for global crop - 0.5 was recommended in the paper
         moving_average_decay=0.99,  # moving average of encoder - paper showed anywhere from 0.9 to 0.999 was ok
         center_moving_average_decay=0.9995,  # moving average of teacher centers - paper showed anywhere from 0.9 to 0.999 was ok
-        augment_fn=torch.nn.Sequential(),
-        augment_fn2=torch.nn.Sequential(),  # add pass throughs
+        # augment_fn=torch.nn.Sequential(),
+        # augment_fn2=torch.nn.Sequential(),  # add pass throughs
     )
 
     opt = torch.optim.Adam(learner.parameters(), lr=3e-4)
@@ -161,4 +167,36 @@ if __name__ == "__main__":
 
         print(f"Epoch : {epoch+1} - loss : {epoch_loss:.4f}\n")
 
-    torch.save(model.state_dict(), "./dino_vit_3d_oc_32e.pt")
+        if epoch % 5 == 0 and epoch != 0:
+            torch.save(model.state_dict(), "./dino_vit_3d_oc_autosave_e.pt")
+
+    torch.save(model.state_dict(), "./dino_vit_3d_oc_100e.pt")
+
+    # not bad so far. thats with
+    # 0 workers
+    # bs 16,
+    # image_height=200,
+    # image_width=20,
+    # patch_height=10,
+    # patch_width=4,
+    # frames=10,  # number of frames
+    # frame_patch_size=2,  # frame patch size
+    # channels=18,
+    # 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 89/89 [02:43<00:00,  1.84s/it]
+    # Epoch : 1 - loss : 10.6873
+
+    # 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 89/89 [02:41<00:00,  1.81s/it]
+    # Epoch : 2 - loss : 9.6875
+
+    # 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 89/89 [02:42<00:00,  1.82s/it]
+    # Epoch : 3 - loss : 8.1268
+
+    # 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 89/89 [02:41<00:00,  1.82s/it]
+    # Epoch : 4 - loss : 6.3330
+
+    # 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 89/89 [02:38<00:00,  1.78s/it]
+    # Epoch : 5 - loss : 4.4586
+
+    # 4 workers
+    # 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 89/89 [02:28<00:00,  1.67s/it]
+    # Epoch : 1 - loss : 10.6873

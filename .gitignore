@@ -5,7 +5,8 @@ __pycache__/
 
 # pretrained model
 dino_vit_3d_catdogs_100e.pt
-dino_vit_3d_oc_32e.pt
+dino_vit_3d_oc_17e.pt
+*.pt
 
 # C extensions
 *.so

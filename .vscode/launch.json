@@ -37,6 +37,7 @@
             "justMyCode": false,
             "env": {
                 "PYTHONPATH": "${workspaceRoot}",
+                "PYTHONWARNINGS": "ignore",
                 // "PATH": "${workspaceFolder}/pl_models",
             }
         },
