@@ -510,64 +510,6 @@ class Dino3DOC(nn.Module):
         super().__init__()
         self.net = net
 
-        # DEFAULT_AUG = torch.nn.Sequential(
-        # NOTE calc'd from batch of 2048 vols
-        # of original 10 sample symbs
-        # DEFAULT_AUG = T.Compose(
-        #     [
-        #         NormalizeVideo(
-        #             # channel_dim=0,
-        #             mean=torch.tensor(
-        #                 [
-        #                     6.2324e01,
-        #                     9.6467e00,
-        #                     6.1295e01,
-        #                     7.7610e00,
-        #                     1.9308e-01,
-        #                     2.5376e02,
-        #                     1.4423e-04,
-        #                     1.0992e00,
-        #                     4.7027e01,
-        #                     1.0202e01,
-        #                     9.1426e00,
-        #                     9.7798e00,
-        #                     8.0463e00,
-        #                     1.0072e00,
-        #                     2.2545e02,
-        #                     8.9769e-05,
-        #                     1.0992e00,
-        #                     3.0351e01,
-        #                 ]
-        #             ),
-        #             std=torch.tensor(
-        #                 [
-        #                     2.5093e02,
-        #                     7.3349e01,
-        #                     2.4793e02,
-        #                     6.2451e01,
-        #                     1.1387e00,
-        #                     2.4505e03,
-        #                     3.4080e-03,
-        #                     3.6982e00,
-        #                     1.3704e03,
-        #                     4.8059e01,
-        #                     5.6805e01,
-        #                     4.7098e01,
-        #                     4.8254e01,
-        #                     3.4649e00,
-        #                     2.0212e03,
-        #                     3.6038e-03,
-        #                     3.6982e00,
-        #                     7.5986e02,
-        #                 ]
-        #             ),
-        #         )
-        #     ]
-        # )
-
-        # self.augment1 = default(augment_fn, DEFAULT_AUG)
-        # self.augment2 = default(augment_fn2, DEFAULT_AUG)
-
         # local and global crops
 
         self.local_crop = T.RandomCrop(

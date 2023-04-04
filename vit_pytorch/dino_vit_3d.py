@@ -64,7 +64,8 @@ class CatsDogsDataset(Dataset):
 if __name__ == "__main__":
 
     # Training settings
-    batch_size = 32
+    batch_size = 8
+    num_workers = 0
     epochs = 20
     lr = 3e-5
     gamma = 0.7
@@ -112,13 +113,13 @@ if __name__ == "__main__":
     test_data = CatsDogsDataset(test_list, transform=transforms)
 
     train_loader = DataLoader(
-        dataset=train_data, batch_size=batch_size, shuffle=True, num_workers=8
+        dataset=train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
     valid_loader = DataLoader(
-        dataset=valid_data, batch_size=batch_size, shuffle=True, num_workers=8
+        dataset=valid_data, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
     test_loader = DataLoader(
-        dataset=test_data, batch_size=batch_size, shuffle=True, num_workers=8
+        dataset=test_data, batch_size=batch_size, shuffle=True, num_workers=num_workers
     )
 
     print(len(train_data), len(train_loader))
@@ -139,8 +140,8 @@ if __name__ == "__main__":
     )
 
     # model pass thrus
-    # b = next(iter(valid_loader))
-    # model(b[:4]).shape
+    b = next(iter(valid_loader))
+    model(b[:4]).shape
 
     # wrapped_model = NetWrapper(model, 256, 4, 256)  # ,"mlp_head")
     # [_.shape for _ in wrapped_model(b[:4])]

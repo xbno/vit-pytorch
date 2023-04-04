@@ -41,5 +41,25 @@
                 // "PATH": "${workspaceFolder}/pl_models",
             }
         },
+        {
+            "name": "viz_dino_vit_3d_oc",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/vit_pytorch/viz_dino_vit_3d_oc.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}",
+                "PYTHONWARNINGS": "ignore",
+                // "PATH": "${workspaceFolder}/pl_models",
+            },
+            "args": [
+                "--pretrained_weights",
+                "/Users/xbno/ml/vit-pytorch/dino_vit_3d_oc_e50_0.0061.pt",
+                "--symbols",
+                "[\"MSFT\"]",
+            ],
+        },
     ]
 }

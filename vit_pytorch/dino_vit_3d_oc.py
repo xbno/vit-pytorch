@@ -33,10 +33,6 @@ from vit_pytorch.dino import Dino3D, Dino3DOC
 import contrastive
 import pathlib
 
-import warnings
-
-warnings.filterwarnings("ignore")
-
 
 def seed_everything(seed):
     random.seed(seed)
@@ -62,7 +58,7 @@ if __name__ == "__main__":
     seed_everything(seed)
 
     # data
-    train_ds = oc_ds = contrastive.OcDataset(
+    train_ds = contrastive.OcDataset(
         data_dir="/Users/xbno/Downloads/vit_20201123_to_20230328/npy",
         pretext_task="spatiotemporal",
         num_frames=10,  # frames per window

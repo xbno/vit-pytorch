@@ -85,6 +85,7 @@ def spatiotemporal_dates(
     stride,
     max_delta,
     skip_symbols=[],
+    keep_symbols=[],
     return_type="dict",
 ):
     """Creates pairs of date "frames" to be used in contrastive loss.
@@ -107,47 +108,54 @@ def spatiotemporal_dates(
     for symbol in symbols:
         if symbol in skip_symbols:
             continue
-        dates = symbols_dates[symbol]
-        delta = 1
-        if len(dates) <= num_frames * 2 + delta:
-            logging.warning(
-                f"num_frames({num_frames}) and delta({delta}): {num_frames * 2 + delta}d sample >> {len(dates)}d dataset"
-            )
-        set_idxs = [i for i in range(0, len(dates), stride)]
-        num_sets = len(set_idxs)
-        deltas = np.random.choice(
-            np.arange(max_delta),
-            p=np.arange(max_delta, 0, -1) / sum(np.arange(max_delta, 0, -1)),
-            size=num_sets,
-        )
-        for delta, w1, w2 in [
-            (
-                delta,
-                dates[idx : idx + num_frames],
-                dates[idx + num_frames + delta : idx + num_frames * 2 + delta],
-            )
-            for idx, delta in zip(range(0, len(dates), stride), deltas)
-            if len(dates[idx + num_frames + delta : idx + num_frames * 2 + delta])
-            == num_frames
-        ]:
-            logging.debug(
-                f"{symbol}, {delta}, {num_frames}, {len(dates)}, {[f for f in w1]} -> {[f for f in w2]}"
-            )
-            if return_type == "dict":
-                date_sets.append(
-                    {
-                        "delta": delta,
-                        "window_one": [f"{dataset_path}/{symbol}-{w}.npy" for w in w1],
-                        "window_two": [f"{dataset_path}/{symbol}-{w}.npy" for w in w2],
-                    }
+        if (len(keep_symbols) > 0 and symbol in keep_symbols) or (
+            len(keep_symbols) == 0
+        ):
+            dates = symbols_dates[symbol]
+            delta = 1
+            if len(dates) <= num_frames * 2 + delta:
+                logging.warning(
+                    f"num_frames({num_frames}) and delta({delta}): {num_frames * 2 + delta}d sample >> {len(dates)}d dataset"
                 )
-            else:
-                date_sets.append(
-                    (
-                        [f"{dataset_path}/{symbol}-{w}.npy" for w in w1],
-                        [f"{dataset_path}/{symbol}-{w}.npy" for w in w2],
+            set_idxs = [i for i in range(0, len(dates), stride)]
+            num_sets = len(set_idxs)
+            deltas = np.random.choice(
+                np.arange(max_delta),
+                p=np.arange(max_delta, 0, -1) / sum(np.arange(max_delta, 0, -1)),
+                size=num_sets,
+            )
+            for delta, w1, w2 in [
+                (
+                    delta,
+                    dates[idx : idx + num_frames],
+                    dates[idx + num_frames + delta : idx + num_frames * 2 + delta],
+                )
+                for idx, delta in zip(range(0, len(dates), stride), deltas)
+                if len(dates[idx + num_frames + delta : idx + num_frames * 2 + delta])
+                == num_frames
+            ]:
+                logging.debug(
+                    f"{symbol}, {delta}, {num_frames}, {len(dates)}, {[f for f in w1]} -> {[f for f in w2]}"
+                )
+                if return_type == "dict":
+                    date_sets.append(
+                        {
+                            "delta": delta,
+                            "window_one": [
+                                f"{dataset_path}/{symbol}-{w}.npy" for w in w1
+                            ],
+                            "window_two": [
+                                f"{dataset_path}/{symbol}-{w}.npy" for w in w2
+                            ],
+                        }
                     )
-                )
+                else:
+                    date_sets.append(
+                        (
+                            [f"{dataset_path}/{symbol}-{w}.npy" for w in w1],
+                            [f"{dataset_path}/{symbol}-{w}.npy" for w in w2],
+                        )
+                    )
     return date_sets
 
 
@@ -201,12 +209,15 @@ class OcDataset(Dataset):
         num_frames,
         stride,
         max_delta,
-        skip_symbols,
+        skip_symbols=[],
+        keep_symbols=[],
     ):
         self.transform = T.Compose(
             [
                 NormalizeVideo(
                     # channel_dim=0,
+                    # NOTE calc'd from batch of 2048 vols
+                    # of original 10 sample symbs
                     mean=torch.tensor(
                         [
                             6.2324e01,
@@ -265,6 +276,7 @@ class OcDataset(Dataset):
                 stride=stride,
                 max_delta=max_delta,
                 skip_symbols=skip_symbols,
+                keep_symbols=keep_symbols,
             )
         else:
             raise ("no pretext task set!")

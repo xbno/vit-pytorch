@@ -54,7 +54,10 @@ class Attention(nn.Module):
         self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
         self.to_out = (
-            nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout))
+            nn.Sequential(
+                nn.Linear(inner_dim, dim),
+                nn.Dropout(dropout),
+            )
             if project_out
             else nn.Identity()
         )
@@ -70,33 +73,62 @@ class Attention(nn.Module):
 
         out = torch.matmul(attn, v)
         out = rearrange(out, "b h n d -> b n (h d)")
-        return self.to_out(out)
+        return self.to_out(out), attn
 
 
-class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.0):
+class Block(nn.Module):
+    def __init__(
+        self,
+        dim,
+        heads,
+        dim_head,
+        mlp_dim,
+        dropout,
+    ):
         super().__init__()
-        self.layers = nn.ModuleList([])
-        for _ in range(depth):
-            self.layers.append(
-                nn.ModuleList(
-                    [
-                        PreNorm(
-                            dim,
-                            Attention(
-                                dim, heads=heads, dim_head=dim_head, dropout=dropout
-                            ),
-                        ),
-                        PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout)),
-                    ]
-                )
-            )
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = Attention(
+            dim=dim,
+            heads=heads,
+            dim_head=dim_head,
+            dropout=dropout,
+        )
+        self.norm2 = nn.LayerNorm(dim)
+        self.ff = FeedForward(
+            dim=dim,
+            hidden_dim=mlp_dim,
+            dropout=dropout,
+        )
 
-    def forward(self, x):
-        for attn, ff in self.layers:
-            x = attn(x) + x
-            x = ff(x) + x
+    def forward(self, x, return_attention=False):
+        y, attn = self.attn(self.norm1(x))
+        if return_attention:
+            return attn
+        x = x + self.ff(self.norm2(y))
         return x
+
+
+# class Transformer(nn.Module):
+#     def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.0):
+#         super().__init__()
+#         self.blocks = nn.ModuleList(
+#             [
+#                 Block(
+#                     dim=dim,
+#                     heads=heads,
+#                     dim_head=dim_head,
+#                     mlp_dim=mlp_dim,
+#                     dropout=dropout,
+#                 )
+#                 for _ in range(depth)
+#             ]
+#         )
+
+#     def forward(self, x):
+#         for attn, ff in self.blocks:
+#             x = attn(x) + x
+#             x = ff(x) + x
+#         return xX
 
 
 class ViT(nn.Module):
@@ -157,7 +189,19 @@ class ViT(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
 
-        self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
+        # self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
+        self.blocks = nn.ModuleList(
+            [
+                Block(
+                    dim=dim,
+                    heads=heads,
+                    dim_head=dim_head,
+                    mlp_dim=mlp_dim,
+                    dropout=dropout,
+                )
+                for _ in range(depth)
+            ]
+        )
 
         self.pool = pool
         self.to_latent = nn.Identity()
@@ -165,20 +209,37 @@ class ViT(nn.Module):
         self.mlp_head = nn.Sequential(nn.LayerNorm(dim), nn.Linear(dim, num_classes))
 
     def forward(self, video):
+        # prep input
         x = self.to_patch_embedding(video)
         b, n, _ = x.shape
-
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
         x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, : (n + 1)]
-        x = self.dropout(x)
 
-        x = self.transformer(x)
+        # feed through
+        x = self.dropout(x)
+        for block in self.blocks:
+            x = block(x)
 
         x = x.mean(dim=1) if self.pool == "mean" else x[:, 0]
-
         x = self.to_latent(x)
         return self.mlp_head(x)
+
+    def get_last_selfattention(self, video):
+        # prep input
+        x = self.to_patch_embedding(video)
+        b, n, _ = x.shape
+        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x += self.pos_embedding[:, : (n + 1)]
+
+        # feed through
+        for i, block in enumerate(self.blocks):
+            if i < len(self.blocks) - 1:
+                x = block(x)
+            else:
+                # return attention of the last block
+                return block(x, return_attention=True)
 
 
 class ViTOC(nn.Module):
