@@ -23,13 +23,16 @@ import pathlib
 
 # import skimage.io
 # from skimage.measure import find_contours
-# import matplotlib.pyplot as plt
-# from matplotlib.patches import Polygon
-# import torch
-# import torch.nn as nn
-# import torchvision
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+
+import torch.nn as nn
+
+import torchvision
+
 # from torchvision import transforms as pth_transforms
-# import numpy as np
+import numpy as np
+
 # from PIL import Image
 
 # import utils
@@ -143,14 +146,16 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------ #
 
     # build model
+    image_height = 100
+    image_width = 15
     model = ViTOC(
-        image_height=200,
-        image_width=20,
-        patch_height=10,
-        patch_width=4,
+        image_height=image_height,
+        image_width=image_width,
+        patch_height=5,
+        patch_width=3,
         frames=10,  # number of frames
         frame_patch_size=2,  # frame patch size
-        channels=18,
+        channels=8,
         num_classes=1000,
         dim=1024,
         depth=6,
@@ -167,7 +172,7 @@ if __name__ == "__main__":
     lr = 3e-5
     gamma = 0.7
     seed = 42
-    device = "mps"
+    device = "cpu"
 
     for p in model.parameters():
         p.requires_grad = False
@@ -183,7 +188,7 @@ if __name__ == "__main__":
     )
 
     test_ds = contrastive.OcDataset(
-        data_dir="/Users/xbno/Downloads/vit_20201123_to_20230328/npy",
+        data_dir="/Users/xbno/Downloads/vit_20201123_to_20230328b/npy",
         pretext_task="spatiotemporal",
         num_frames=10,  # frames per window
         stride=3,  # num frames between next window set
@@ -201,29 +206,33 @@ if __name__ == "__main__":
     # model pass thrus
     b = next(iter(test_dl))
     w1, w2 = b["window_one"].to(device), b["window_two"].to(device)
+    w1fps, w2fps = b["window_one_filepaths"], b["window_two_filepaths"]
     e1 = w1[:1]  # pull single example from batch
 
+    # model(w1).shape
+
     # make the image divisible by the patch size
-    patch_height = 10
-    patch_width = 4
     frame_patch_size = 2
+    patch_height = 5
+    patch_width = 3
+    patch_size = [frame_patch_size, patch_height, patch_width]
     f, h, w = (
         e1.shape[2] - e1.shape[2] % frame_patch_size,
         e1.shape[3] - e1.shape[3] % patch_height,
         e1.shape[4] - e1.shape[4] % patch_width,
     )
-    e1 = e1[:, :, :f, :h, :w].unsqueeze(0)
+    # e1 = e1[:, :, :f, :h, :w].unsqueeze(0) # unsqueeze just makes it a batch dim thing
 
-    model(e1).shape
+    w_featmap = e1.shape[-1] // patch_width
+    h_featmap = e1.shape[-2] // patch_height
+    f_featmap = e1.shape[-3] // frame_patch_size
 
-    w_featmap = img.shape[-2] // args.patch_size
-    h_featmap = img.shape[-1] // args.patch_size
+    attentions = model.get_last_selfattention(e1.to(device))
 
-    attentions = model.get_last_selfattention(img.to(device))
+    nh = attentions.shape[1]  # number of heads
 
-    nh = attentions.shape[1]  # number of head
-
-    # we keep only the output patch attention
+    # i think attentions is shape bs, num_heads, num_patches, num_patches
+    # we keep only the cls_token attention in regards to all other patches, i think
     attentions = attentions[0, :, 0, 1:].reshape(nh, -1)
 
     if args.threshold is not None:
@@ -245,14 +254,28 @@ if __name__ == "__main__":
             .numpy()
         )
 
-    attentions = attentions.reshape(nh, w_featmap, h_featmap)
+    attentions = attentions.reshape(nh, f_featmap, h_featmap, w_featmap)
     attentions = (
         nn.functional.interpolate(
-            attentions.unsqueeze(0), scale_factor=args.patch_size, mode="nearest"
+            attentions.unsqueeze(0), scale_factor=patch_size, mode="nearest"
         )[0]
         .cpu()
         .numpy()
     )
+
+    # save attention and the other thing
+    symbol = w1fps[0].split(",")[0].split("/")[-1].split(".")[0].split("-")[0]
+    from_date = "-".join(
+        w1fps[0].split(",")[0].split("/")[-1].split(".")[0].split("-")[1:]
+    )
+    to_date = "-".join(
+        w1fps[0].split(",")[-1].split("/")[-1].split(".")[0].split("-")[1:]
+    )
+    np.save(
+        f"{symbol}_{from_date}_to_{to_date}_window.npy",
+        contrastive.load_uniform_volume(w1fps[0].split(",")).numpy(),
+    )
+    np.save(f"{symbol}_{from_date}_to_{to_date}_attention.npy", attentions)
 
     # save attentions heatmaps
     os.makedirs(args.output_dir, exist_ok=True)

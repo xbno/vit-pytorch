@@ -104,6 +104,7 @@ def spatiotemporal_dates(
     """
 
     date_sets = []
+    skipped_symbols = []
     symbols = list(symbols_dates.keys())
     for symbol in symbols:
         if symbol in skip_symbols:
@@ -112,11 +113,17 @@ def spatiotemporal_dates(
             len(keep_symbols) == 0
         ):
             dates = symbols_dates[symbol]
-            delta = 1
-            if len(dates) <= num_frames * 2 + delta:
-                logging.warning(
-                    f"num_frames({num_frames}) and delta({delta}): {num_frames * 2 + delta}d sample >> {len(dates)}d dataset"
-                )
+            # randomly pop a few dates so it staggers each epoch
+            # TODO once i reshuffle each epoch
+            rand_pop = np.random.randint(low=0, high=5)
+            if len(dates) <= num_frames * 2 + max_delta + rand_pop:
+                # logging.warning(
+                #     f"num_frames({num_frames}), delta({max_delta}), rand_pop({rand_pop}): {num_frames * 2 + max_delta + rand_pop}d sample >> {len(dates)}d dataset"
+                # )
+                logging.warning(f"skipping {symbol}: only {len(dates)} date(s)")
+                skipped_symbols.append(symbol)
+                continue
+
             set_idxs = [i for i in range(0, len(dates), stride)]
             num_sets = len(set_idxs)
             deltas = np.random.choice(
@@ -184,7 +191,7 @@ def load_uniform_volume(slice_filepaths):
     return volume
 
 
-def load_symbols_dates_from_dataset(dataset_path="/Users/xbno/Downloads/unpadded_sm"):
+def load_symbols_dates_from_dataset(dataset_path):
     filepaths = glob.glob(f"{dataset_path}/*.npy")
     symbols_dates = collections.defaultdict(list)
     for filepath in filepaths:
@@ -214,60 +221,92 @@ class OcDataset(Dataset):
     ):
         self.transform = T.Compose(
             [
+                # torch.nn.Sequential()
+                # TODO find mean/std from calcs not including
+                # zeros, since there are many.
+                # try this: https://discuss.pytorch.org/t/use-tensor-mean-method-but-ignore-0-values/60170/3
                 NormalizeVideo(
-                    # channel_dim=0,
-                    # NOTE calc'd from batch of 2048 vols
-                    # of original 10 sample symbs
-                    mean=torch.tensor(
+                    mean=torch.Tensor(
                         [
-                            6.2324e01,
-                            9.6467e00,
-                            6.1295e01,
-                            7.7610e00,
-                            1.9308e-01,
-                            2.5376e02,
-                            1.4423e-04,
-                            1.0992e00,
-                            4.7027e01,
-                            1.0202e01,
-                            9.1426e00,
-                            9.7798e00,
-                            8.0463e00,
-                            1.0072e00,
-                            2.2545e02,
-                            8.9769e-05,
-                            1.0992e00,
-                            3.0351e01,
+                            3.8504e-01,
+                            3.4533e02,
+                            2.1859e-04,
+                            1.2402e00,
+                            8.6137e-01,
+                            4.4128e02,
+                            1.6343e-04,
+                            1.2402e00,
                         ]
                     ),
-                    std=torch.tensor(
+                    std=torch.Tensor(
                         [
-                            2.5093e02,
-                            7.3349e01,
-                            2.4793e02,
-                            6.2451e01,
-                            1.1387e00,
-                            2.4505e03,
-                            3.4080e-03,
-                            3.6982e00,
-                            1.3704e03,
-                            4.8059e01,
-                            5.6805e01,
-                            4.7098e01,
-                            4.8254e01,
-                            3.4649e00,
-                            2.0212e03,
-                            3.6038e-03,
-                            3.6982e00,
-                            7.5986e02,
+                            1.7997e00,
+                            2.6223e03,
+                            3.9207e-03,
+                            3.3435e00,
+                            2.6852e00,
+                            2.8250e03,
+                            5.6097e-03,
+                            3.3435e00,
                         ]
                     ),
                 )
+                # NormalizeVideo(
+                #     # channel_dim=0,
+                #     # NOTE calc'd from batch of 2048 vols
+                #     # of original 10 sample symbs
+                #     mean=torch.tensor(
+                #         [
+                #             6.2324e01,
+                #             9.6467e00,
+                #             6.1295e01,
+                #             7.7610e00,
+                #             1.9308e-01,
+                #             2.5376e02,
+                #             1.4423e-04,
+                #             1.0992e00,
+                #             4.7027e01,
+                #             1.0202e01,
+                #             9.1426e00,
+                #             9.7798e00,
+                #             8.0463e00,
+                #             1.0072e00,
+                #             2.2545e02,
+                #             8.9769e-05,
+                #             1.0992e00,
+                #             3.0351e01,
+                #         ]
+                #     ),
+                #     std=torch.tensor(
+                #         [
+                #             2.5093e02,
+                #             7.3349e01,
+                #             2.4793e02,
+                #             6.2451e01,
+                #             1.1387e00,
+                #             2.4505e03,
+                #             3.4080e-03,
+                #             3.6982e00,
+                #             1.3704e03,
+                #             4.8059e01,
+                #             5.6805e01,
+                #             4.7098e01,
+                #             4.8254e01,
+                #             3.4649e00,
+                #             2.0212e03,
+                #             3.6038e-03,
+                #             3.6982e00,
+                #             7.5986e02,
+                #         ]
+                # ),
+                # )
             ]
         )
         symbols_dates = load_symbols_dates_from_dataset(data_dir)
 
         # spatiotemporal: https://arxiv.org/pdf/2008.03800v4.pdf
+        # TODO convert this to a collate_fn so that the dates are randomly reshuffled
+        # after each epoch. like: https://discuss.pytorch.org/t/dataloader-re-initialize-dataset-after-each-iteration/32658/8
         if pretext_task == "spatiotemporal":
             self.pairs = spatiotemporal_dates(
                 dataset_path=data_dir,
@@ -288,9 +327,11 @@ class OcDataset(Dataset):
         # from days, channels, strikes, exps -> channels, days, strikes, exps
         # print(idx)
         return {
+            "window_one_filepaths": ",".join(self.pairs[idx]["window_one"]),
             "window_one": self.transform(
                 load_uniform_volume(self.pairs[idx]["window_one"])
             ),
+            "window_two_filepaths": ",".join(self.pairs[idx]["window_two"]),
             "window_two": self.transform(
                 load_uniform_volume(self.pairs[idx]["window_two"])
             ),

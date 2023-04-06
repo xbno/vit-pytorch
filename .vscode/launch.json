@@ -56,9 +56,13 @@
             },
             "args": [
                 "--pretrained_weights",
-                "/Users/xbno/ml/vit-pytorch/dino_vit_3d_oc_e50_0.0061.pt",
+                // "/Users/xbno/ml/vit-pytorch/dino_vit_3d_oc_autosave_e0.pt.pt",
+                // "/Users/xbno/ml/vit-pytorch/dino_vit_3d_oc_autosave_e10_0.0454.pt",
+                "/Users/xbno/ml/vit-pytorch/dino_vit_3d_oc_autosave_e.pt",
                 "--symbols",
                 "[\"MSFT\"]",
+                // "--threshold",
+                // "0.6"
             ],
         },
     ]

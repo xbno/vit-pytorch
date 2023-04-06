@@ -303,7 +303,20 @@ class ViTOC(nn.Module):
         self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
         self.dropout = nn.Dropout(emb_dropout)
 
-        self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
+        # self.transformer = Transformer(dim, depth, heads, dim_head, mlp_dim, dropout)
+
+        self.blocks = nn.ModuleList(
+            [
+                Block(
+                    dim=dim,
+                    heads=heads,
+                    dim_head=dim_head,
+                    mlp_dim=mlp_dim,
+                    dropout=dropout,
+                )
+                for _ in range(depth)
+            ]
+        )
 
         self.pool = pool
         self.to_latent = nn.Identity()
@@ -312,17 +325,35 @@ class ViTOC(nn.Module):
 
     def forward(self, video):
         # [2,18,10,200,20] working input
+
+        # prep input
         x = self.to_patch_embedding(video)
         b, n, _ = x.shape
-
         cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
         x = torch.cat((cls_tokens, x), dim=1)
         x += self.pos_embedding[:, : (n + 1)]
-        x = self.dropout(x)
 
-        x = self.transformer(x)
+        # feed through
+        x = self.dropout(x)
+        for block in self.blocks:
+            x = block(x)
 
         x = x.mean(dim=1) if self.pool == "mean" else x[:, 0]
-
         x = self.to_latent(x)
         return self.mlp_head(x)
+
+    def get_last_selfattention(self, video):
+        # prep input
+        x = self.to_patch_embedding(video)
+        b, n, _ = x.shape
+        cls_tokens = repeat(self.cls_token, "1 1 d -> b 1 d", b=b)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x += self.pos_embedding[:, : (n + 1)]
+
+        # feed through
+        for i, block in enumerate(self.blocks):
+            if i < len(self.blocks) - 1:
+                x = block(x)
+            else:
+                # return attention of the last block
+                return block(x, return_attention=True)

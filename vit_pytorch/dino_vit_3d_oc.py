@@ -6,6 +6,7 @@ import os
 import sys
 import random
 import zipfile
+import math
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,6 +33,7 @@ from vit_pytorch.dino import Dino3D, Dino3DOC
 # from pl_cnn import data, contrastive
 import contrastive
 import pathlib
+import logging
 
 
 def seed_everything(seed):
@@ -47,8 +49,8 @@ def seed_everything(seed):
 if __name__ == "__main__":
 
     # Training settings
-    batch_size = 16
-    num_workers = 2
+    batch_size = 32
+    num_workers = 8
     epochs = 20
     lr = 3e-5
     gamma = 0.7
@@ -59,7 +61,8 @@ if __name__ == "__main__":
 
     # data
     train_ds = contrastive.OcDataset(
-        data_dir="/Users/xbno/Downloads/vit_20201123_to_20230328/npy",
+        # data_dir="/Users/xbno/Downloads/vit_20201123_to_20230328b/npy",
+        data_dir="/Users/xbno/Downloads/vit_20201123_to_20230404/npy",
         pretext_task="spatiotemporal",
         num_frames=10,  # frames per window
         stride=3,  # num frames between next window set
@@ -79,26 +82,32 @@ if __name__ == "__main__":
 
     print(len(train_ds), len(train_dl))
 
-    def mean_std(loader):
-        # shape of images = [b,c,f,w,h]
-        images = next(iter(loader))
-        mean = torch.cat((images["window_one"], images["window_one"])).mean(
-            [0, 2, 3, 4]
-        )
-        std = torch.cat((images["window_one"], images["window_one"])).std([0, 2, 3, 4])
-        print("mean and std: \n", mean, std)
-        return mean, std
+    # def mean_std(loader):
+    #     # shape of images = [b,c,f,w,h]
+    #     images = next(iter(loader))
+    #     mean = torch.cat((images["window_one"], images["window_one"])).mean(
+    #         [0, 2, 3, 4]
+    #     )
+    #     std = torch.cat((images["window_one"], images["window_one"])).std([0, 2, 3, 4])
+    #     logging.info("mean and std: \n", mean, std)
+    #     return mean, std
 
-    mean_std(train_dl)
+    # mean_std(train_dl)
 
+    image_height = 100  # num strikes
+    image_width = 15  # num exps
+    patch_height = 10  # 20
+    patch_width = 3  # 5
+    frame_patch_size = 2
+    channels = 8
     model = ViTOC(
-        image_height=200,
-        image_width=20,
-        patch_height=10,
-        patch_width=4,
+        image_height=image_height,
+        image_width=image_width,
+        patch_height=patch_height,
+        patch_width=patch_width,
         frames=10,  # number of frames
-        frame_patch_size=2,  # frame patch size
-        channels=18,
+        frame_patch_size=frame_patch_size,  # frame patch size
+        channels=channels,
         num_classes=1000,
         dim=1024,
         depth=6,
@@ -112,19 +121,21 @@ if __name__ == "__main__":
 
     # model pass thrus
     # b = next(iter(train_dl))
-    # model(b[:4]).shape
+    # w1, w2 = b["window_one"], b["window_two"]
+    # model(w1[:4]).shape
+    # model.get_last_selfattention(w1[:4]).shape
 
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    count_parameters(model)
+    print(count_parameters(model))
 
     learner = Dino3DOC(
         model,
         frames=10,
-        image_height=200,
-        image_width=20,
-        channels=18,
+        image_height=image_height,
+        image_width=image_width,
+        channels=channels,
         hidden_layer="to_latent",  # hidden layer name or index, from which to extract the embedding
         projection_hidden_size=256,  # projector network hidden dimension
         projection_layers=4,  # number of layers in projection network
@@ -151,14 +162,22 @@ if __name__ == "__main__":
     for epoch in range(epochs):
         epoch_loss = 0
 
-        for images in tqdm(train_dl):
-            images["window_one"] = images["window_one"].to(device)
-            images["window_two"] = images["window_two"].to(device)
-            loss = learner(images)
+        for videos in tqdm(train_dl):
+            videos["window_one"] = videos["window_one"].to(device)
+            videos["window_two"] = videos["window_two"].to(device)
+            if videos["window_one"].max() >= 100:
+                # print(videos["window_one"].max())
+                contrastive.load_uniform_volume(
+                    videos["window_one_filepaths"][0].split(",")
+                ).max()
+            loss = learner(videos)
             opt.zero_grad()
             loss.backward()
+            # nn.utils.clip_grad_value_(learner.parameters(), clip_value=1.0)
             opt.step()
             learner.update_moving_average()  # update moving average of teacher encoder and teacher centers
+            if math.isnan(loss):
+                loss
             epoch_loss += loss / len(train_dl)
 
         print(f"Epoch : {epoch+1} - loss : {epoch_loss:.4f}\n")
@@ -166,7 +185,7 @@ if __name__ == "__main__":
         if epoch % 5 == 0 and epoch != 0:
             torch.save(model.state_dict(), "./dino_vit_3d_oc_autosave_e.pt")
 
-    torch.save(model.state_dict(), "./dino_vit_3d_oc_100e.pt")
+    # torch.save(model.state_dict(), "./dino_vit_3d_oc_100e.pt")
 
     # not bad so far. thats with
     # 0 workers
